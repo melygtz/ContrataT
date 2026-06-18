@@ -359,12 +359,37 @@ function generarTokenCorreo() {
 }
 
 async function enviarTokenPorCorreo(destino, token, portal, nombreCompleto = "") {
+  const webhookGmail = process.env.CORREO_WEBHOOK_URL;
+  const secretoWebhook = process.env.CORREO_WEBHOOK_SECRETO;
   const host = process.env.CORREO_HOST;
   const usuario = process.env.CORREO_USUARIO;
   const contrasena = process.env.CORREO_CONTRASENA;
 
   const asunto = `Token de verificacion ContrataT - ${portal.toUpperCase()}`;
   const texto = `Hola ${nombreCompleto || "usuario"}, tu token de verificacion es ${token}. Expira en 10 minutos.`;
+  const html = `<p>Hola ${nombreCompleto || "usuario"},</p><p>Tu token de verificacion es:</p><h2>${token}</h2><p>Expira en 10 minutos.</p>`;
+
+  if (webhookGmail) {
+    const respuesta = await fetch(webhookGmail, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        secreto: secretoWebhook,
+        destino,
+        asunto,
+        texto,
+        html
+      })
+    });
+    const datos = await respuesta.json().catch(() => null);
+    if (!respuesta.ok || datos?.ok === false) {
+      throw new Error(datos?.mensaje || "El webhook de Gmail no pudo enviar el correo");
+    }
+    return {
+      modo: "gmail-webhook",
+      mensaje: "Token enviado al correo electronico."
+    };
+  }
 
   if (!host || !usuario || !contrasena) {
     console.log("Token de correo ContrataT:", { destino, portal, token });
@@ -390,7 +415,7 @@ async function enviarTokenPorCorreo(destino, token, portal, nombreCompleto = "")
     to: destino,
     subject: asunto,
     text: texto,
-    html: `<p>Hola ${nombreCompleto || "usuario"},</p><p>Tu token de verificacion es:</p><h2>${token}</h2><p>Expira en 10 minutos.</p>`
+    html
   });
 
   return {
