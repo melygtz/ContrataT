@@ -92,6 +92,13 @@ CORREO_REMITENTE=ContrataT <tu_correo@gmail.com>
 
 Si no configuras SMTP, el sistema funciona en modo prueba y muestra el token en la consola del servidor.
 
+Si el hosting bloquea SMTP de Gmail, puedes usar Google Apps Script como puente de envio con estas variables:
+
+```text
+CORREO_WEBHOOK_URL=https://script.google.com/macros/s/ID_DEL_SCRIPT/exec
+CORREO_WEBHOOK_SECRETO=una_clave_privada
+```
+
 ## Usuarios de prueba
 
 RH:
