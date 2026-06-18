@@ -233,8 +233,33 @@ app.post("/api/postulaciones", async (solicitud, respuesta) => {
   }
 
   const postulaciones = obtenerColeccion("postulaciones");
-  const existente = await postulaciones.findOne({ reclutaId: recluta._id, estado: { $ne: "Acceso cerrado" } });
+  const estadosFinalizados = [
+    "Postulacion cancelada por Recluta",
+    "Acceso cerrado",
+    "Acceso negado por RH",
+    "Acceso negado por Seguridad",
+    "Acceso vencido",
+    "No asistio a entrevista",
+    "No aceptado despues de entrevista"
+  ];
+  const existente = await postulaciones.findOne({
+    reclutaId: recluta._id,
+    estado: { $nin: estadosFinalizados }
+  });
   if (existente) {
+    if (cv) {
+      const camposActualizados = {
+        cv,
+        estado: "CV enviado a RH",
+        notificacionRh: "CV actualizado desde el portal Recluta.",
+        notificacionReclutaLeida: false,
+        actualizadaEn: new Date()
+      };
+      await postulaciones.updateOne({ _id: existente._id }, { $set: camposActualizados });
+      const actualizado = await postulaciones.findOne({ _id: existente._id });
+      await registrarBitacora("cv_actualizado", "recluta", recluta._id, recluta.nombreCompleto);
+      return respuesta.json(actualizado);
+    }
     return respuesta.json(existente);
   }
 
