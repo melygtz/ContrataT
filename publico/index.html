@@ -1,0 +1,140 @@
+﻿<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Recluta | ContrataT</title>
+    <link rel="stylesheet" href="estilos.css">
+  </head>
+  <body data-portal="recluta">
+    <div class="contenedor-app">
+      <header class="barra-superior">
+        <a class="marca" href="index.html">
+          <span class="logo">N</span>
+          <span><strong>ContrataT</strong><small>Control de reclutamiento</small></span>
+        </a>
+        <nav class="cambio-portal">
+          <a class="activo" href="index.html">Recluta</a>
+          <a href="rh.html">RH</a>
+          <a href="seguridad.html">Seguridad</a>
+        </nav>
+        <div class="sesion">
+          <span id="nombreUsuario">Invitado</span>
+          <button class="boton-claro" data-inicio>Ir a inicio</button>
+          <button class="boton-claro" data-cerrar>Cerrar sesion</button>
+        </div>
+      </header>
+
+      <main>
+        <section class="hero">
+          <div>
+            <p class="etiqueta">Portal Recluta</p>
+            <h1>Postulacion inteligente con validacion biometrica.</h1>
+          </div>
+          <div class="indicador"><span>Vacantes activas</span><strong id="totalVacantes">0</strong></div>
+        </section>
+
+        <section id="vistaAcceso" class="acceso">
+          <div class="texto-acceso">
+            <h2>!Bienvenido a ContrataT¡</h2>
+            <p>Registra tu usuario, consulta vacantes, envia tu CV y captura tu imagen biometrica solamente desde el portal Recluta.</p>
+            <div class="pasos"><span>Registro con token</span><span>Validacion de correo</span><span>Camara autorizada</span><span>Seguimiento RH</span></div>
+          </div>
+          <div class="panel">
+            <div class="pestanas">
+              <button class="pestana activo" data-auth-tab="login">Iniciar sesion</button>
+              <button class="pestana" data-auth-tab="registro">Registrarse</button>
+            </div>
+            <form id="formLogin" class="formulario" data-auth-panel="login">
+              <label>Correo electronico<input name="correo" type="email" required></label>
+              <label>Contrasena<input name="contrasena" type="password" required></label>
+              <button class="boton-principal">Entrar al portal</button>
+            </form>
+            <form id="formRegistro" class="formulario oculto" data-auth-panel="registro">
+              <label>Nombre completo<input name="nombreCompleto" required></label>
+              <label>Correo electronico<input name="correo" type="email" required></label>
+              <label>Telefono<input name="telefono" type="tel" required></label>
+              <div class="acciones-registro">
+                <button class="boton-secundario" type="button" data-enviar-token>Enviar token al correo</button>
+              </div>
+              <div class="campos-dobles">
+                <label>Token recibido<input name="tokenCorreo" inputmode="numeric" maxlength="6" required></label>
+                <button class="boton-secundario boton-validar-token" type="button" data-validar-token>Validar token</button>
+              </div>
+              <label class="campo-contrasena oculto">Crear contrasena<input name="contrasena" type="password" minlength="6" disabled required></label>
+              <button class="boton-principal">Crear usuario</button>
+              <p class="nota" data-ayuda-token>Primero envia y valida el token para crear tu contrasena.</p>
+            </form>
+          </div>
+        </section>
+
+        <section id="vistaApp" class="area-trabajo oculto">
+          <aside class="menu-lateral">
+            <button class="opcion activo" data-seccion="dashboard">Dashboard</button>
+            <button class="opcion" data-seccion="vacantes">Vacantes</button>
+            <button class="opcion opcion-mensaje" data-seccion="mensajeAutomatico">Notificaciones <span id="contadorMensajes" class="contador-mensajes oculto">0</span></button>
+            <button id="botonBiometriaRecluta" class="opcion oculto" data-seccion="biometria">Datos biometricos</button>
+            <button id="botonAccesoPlanta" class="opcion oculto" data-seccion="perfilEgresadoRecluta">Acceso planta</button>
+            <button class="opcion" data-seccion="estado">Estado</button>
+            <button class="opcion" data-seccion="historial">Historial</button>
+          </aside>
+          <div class="contenido">
+            <section class="seccion activo" data-panel="dashboard">
+              <div class="titulo-seccion"><p class="etiqueta">Inicio</p><h2>Empresa y proposito</h2></div>
+              <div class="rejilla-info">
+                <article><h3>Que es</h3><p>ContrataT es nuestro sistema de contratacion para las empresas.</p></article>
+                <article><h3>Que hace</h3><p>Coordina vacantes, entrevistas, acceso temporal, captura biometrica autorizada y seguimiento de induccion.</p></article>
+                <article><h3>Valores</h3><p>Respeto, transparencia, seguridad, puntualidad, confidencialidad y oportunidad.</p></article>
+              </div>
+            </section>
+            <section class="seccion" data-panel="vacantes">
+              <div class="titulo-seccion"><p class="etiqueta">Vacantes disponibles</p><h2>Selecciona una vacante</h2></div>
+              <div id="listaVacantes" class="lista"></div>
+            </section>
+            <section class="seccion" data-panel="mensajeAutomatico">
+              <div class="titulo-seccion"><p class="etiqueta">Aviso del sistema</p><h2>Notificaciones</h2></div>
+              <div id="mensajeAutomaticoRecluta" class="tarjeta"></div>
+            </section>
+            <section class="seccion" data-panel="biometria">
+              <div class="titulo-seccion"><p class="etiqueta">Autorizacion RH</p><h2>Acceso a camara</h2></div>
+              <div class="camara-grid">
+                <div class="tarjeta">
+                  <p id="bloqueoCamara">La camara se habilita cuando RH valida tu CV y da acceso a la empresa.</p>
+                  <video id="videoCamara" autoplay playsinline muted></video>
+                  <canvas id="canvasCamara" width="640" height="480" class="oculto"></canvas>
+                  <div class="acciones"><button id="iniciarCamara" class="boton-principal" type="button">Solicitar camara</button><button id="capturarFoto" class="boton-secundario" type="button">Capturar rostro</button></div>
+                </div>
+                <div class="panel">
+                  <h3>Aviso de privacidad</h3>
+                  <p>La imagen sera guardada para que RH y Seguridad la utilicen para validar tu identidad.</p>
+                  <label class="check"><input id="aceptaPrivacidad" type="checkbox">Acepto el uso de datos biometricos para este proceso.</label>
+                  <div id="vistaBiometriaRecluta" class="preview">Sin captura biometrica</div>
+                </div>
+              </div>
+            </section>
+            <section class="seccion" data-panel="perfilEgresadoRecluta">
+              <div class="titulo-seccion"><p class="etiqueta">Nuevo ingreso</p><h2>Acceso planta</h2></div>
+              <div id="perfilEgresadoRecluta" class="tarjeta"></div>
+            </section>
+            <section class="seccion" data-panel="estado">
+              <div class="titulo-seccion"><p class="etiqueta">Seguimiento</p><h2>Estado de postulacion</h2></div>
+              <div id="estadoPostulacion" class="tarjeta"></div>
+            </section>
+            <section class="seccion" data-panel="historial">
+              <div class="titulo-seccion"><p class="etiqueta">Historial</p><h2>Aplicaciones del recluta</h2></div>
+              <div id="historialRecluta" class="lista"></div>
+            </section>
+          </div>
+        </section>
+      </main>
+    </div>
+    <div id="mensaje" class="mensaje"></div>
+    <script src="aplicacion.js"></script>
+  </body>
+</html>
+
+
+
+
+
+

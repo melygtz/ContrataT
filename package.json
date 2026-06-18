@@ -1,0 +1,29 @@
+{
+  "name": "ContrataT",
+  "version": "1.0.0",
+  "description": "Aplicacion web de reclutamiento con portales de Recluta, RH y Seguridad conectada a MongoDB Atlas.",
+  "type": "module",
+  "main": "servidor/servidor.js",
+  "scripts": {
+    "start": "node servidor/servidor.js",
+    "iniciar": "node servidor/servidor.js",
+    "dev": "node --watch servidor/servidor.js",
+    "verificar": "node --check servidor/servidor.js",
+    "crear-base": "py herramientas/crear_base_datos.py"
+  },
+  "keywords": [
+    "reclutamiento",
+    "mongodb",
+    "rh",
+    "seguridad"
+  ],
+  "author": "ContrataT",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "mongodb": "^6.12.0",
+    "nodemailer": "^6.9.16"
+  }
+}
