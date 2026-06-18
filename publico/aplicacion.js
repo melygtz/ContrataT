@@ -1,4 +1,4 @@
-﻿(function () {
+(function () {
   const portal = document.body.dataset.portal;
   const claveSesion = "ContrataT-sesion";
   let usuario = cargarSesion();
@@ -7,6 +7,7 @@
   let postulacionActual = null;
   let historialRecluta = null;
   let accesoSeleccionado = null;
+  let temporizadorReenvioCodigo = null;
 
   const $ = (selector, raiz = document) => raiz.querySelector(selector);
   const $$ = (selector, raiz = document) => Array.from(raiz.querySelectorAll(selector));
@@ -15,11 +16,33 @@
 
   function iniciar() {
     configurarPestanas();
+    configurarRegistroInterno();
     configurarMenu();
     configurarSesion();
     configurarCamara();
     configurarVacantesRh();
     renderizar();
+  }
+
+  function configurarRegistroInterno() {
+    if (portal !== "rh" && portal !== "seguridad") return;
+    const form = $("#formRegistro");
+    if (!form || location.hostname !== "localhost" && location.hostname !== "127.0.0.1") return;
+    form.dataset.tokenValidado = "true";
+    $(".campo-contrasena", form)?.classList.remove("oculto");
+    const inputContrasena = $("input[name='contrasena']", form);
+    if (inputContrasena) inputContrasena.disabled = false;
+    $$("[data-enviar-token], [data-validar-token]", form).forEach((boton) => {
+      boton.classList.add("oculto");
+      boton.disabled = true;
+    });
+    const token = $("input[name='tokenCorreo']", form);
+    if (token) {
+      token.required = false;
+      token.closest("label")?.classList.add("oculto");
+    }
+    const ayuda = $("[data-ayuda-token]", form);
+    if (ayuda) ayuda.textContent = "Registro interno local: crea la contrasena directamente.";
   }
 
   function cargarSesion() {
@@ -82,7 +105,7 @@
     $("#formRegistro")?.addEventListener("submit", async (evento) => {
       evento.preventDefault();
       if (evento.currentTarget.dataset.tokenValidado !== "true") {
-        mensaje("Primero valida el token enviado a tu correo.");
+        mensaje("Primero valida el codigo enviado a tu correo.");
         return;
       }
       const datos = Object.fromEntries(new FormData(evento.currentTarget));
@@ -100,9 +123,10 @@
 
     $("[data-enviar-token]")?.addEventListener("click", async () => {
       const form = $("#formRegistro");
+      const boton = $("[data-enviar-token]", form);
       const datos = Object.fromEntries(new FormData(form));
       if (!datos.nombreCompleto || !datos.correo) {
-        mensaje("Escribe nombre y correo antes de pedir el token.");
+        mensaje("Escribe nombre y correo antes de pedir el codigo.");
         return;
       }
       if ((portal === "rh" || portal === "seguridad") && !datos.numeroReloj) {
@@ -124,9 +148,10 @@
         const ayuda = $("[data-ayuda-token]", form);
         if (ayuda) {
           ayuda.textContent = respuesta.tokenPrueba
-            ? "Modo prueba: tu token es " + respuesta.tokenPrueba
-            : "Revisa tu correo y escribe el token recibido.";
+            ? "Modo prueba: tu codigo es " + respuesta.tokenPrueba
+            : "Revisa tu correo y escribe el codigo recibido.";
         }
+        iniciarEsperaReenvioCodigo(boton);
         mensaje(respuesta.mensaje);
       } catch (error) {
         mensaje(error.message);
@@ -137,7 +162,7 @@
       const form = $("#formRegistro");
       const datos = Object.fromEntries(new FormData(form));
       if (!datos.correo || !datos.tokenCorreo) {
-        mensaje("Escribe el correo y el token recibido.");
+        mensaje("Escribe el correo y el codigo recibido.");
         return;
       }
       try {
@@ -159,6 +184,25 @@
         mensaje(error.message);
       }
     });
+  }
+
+  function iniciarEsperaReenvioCodigo(boton) {
+    if (!boton) return;
+    clearInterval(temporizadorReenvioCodigo);
+    const textoOriginal = "Enviar codigo al correo";
+    let segundos = 30;
+    boton.disabled = true;
+    boton.textContent = `Reenviar en ${segundos}s`;
+    temporizadorReenvioCodigo = setInterval(() => {
+      segundos -= 1;
+      if (segundos <= 0) {
+        clearInterval(temporizadorReenvioCodigo);
+        boton.disabled = false;
+        boton.textContent = textoOriginal;
+        return;
+      }
+      boton.textContent = `Reenviar en ${segundos}s`;
+    }, 1000);
   }
 
   function configurarMenu() {
@@ -591,22 +635,20 @@
   async function renderizarRh() {
     const postulaciones = await api("/api/rh/postulaciones");
     const vacantes = await api("/api/rh/vacantes");
-    $("#totalPostulaciones").textContent = postulaciones.length;
-    $("#listaRh").innerHTML = postulaciones.length ? postulaciones.map((p) => `
-      <article class="item">
-        <div>
-          <h3>${p.nombreRecluta}</h3>
-          <p>${p.tituloVacante} · ${p.estado}</p>
-          ${p.notificacionRh ? `<p><strong>Notificacion:</strong> ${p.notificacionRh}</p>` : ""}
-          <p>CV recibido: ${p.cv?.nombre || "Sin CV adjunto"}</p>
-          <div class="meta"><span>${p.fechaEntrevista}</span><span>${p.entrevistador}</span><span>${p.direccion}</span></div>
-        </div>
-        <div class="acciones">
-          <button class="boton-secundario" data-ver-cv="${p._id}">Ver CV</button>
-          ${p.estado === "CV enviado a RH" ? `<button class="boton-exito" data-aceptar="${p._id}">Validar CV para entrevista</button><button class="boton-peligro" data-rechazar="${p._id}">No dar acceso</button>` : `<span class="estado">${p.estado === "Acceso autorizado por RH" ? "Acceso permitido" : p.estado}</span>`}
-        </div>
-      </article>
-    `).join("") : "<p>No hay CV recibidos.</p>";
+    const canceladas = postulaciones.filter((p) => p.estado === "Postulacion cancelada por Recluta");
+    const rechazadas = postulaciones.filter((p) => [
+      "Acceso negado por RH",
+      "Acceso negado por Seguridad",
+      "Acceso vencido",
+      "No asistio a entrevista",
+      "No aceptado despues de entrevista"
+    ].includes(p.estado));
+    const activas = postulaciones.filter((p) => !canceladas.includes(p) && !rechazadas.includes(p));
+
+    $("#totalPostulaciones").textContent = activas.length;
+    renderizarListaRh("#listaRh", activas, postulaciones, "No hay CV recibidos.", true);
+    renderizarListaRh("#listaCvRechazadosRh", rechazadas, postulaciones, "No hay CV rechazados.", false);
+    renderizarListaRh("#listaCanceladosRh", canceladas, postulaciones, "No hay postulaciones canceladas.", false);
 
     $$("[data-ver-cv]").forEach((boton) => boton.addEventListener("click", () => {
       const postulacion = postulaciones.find((p) => p._id === boton.dataset.verCv);
@@ -626,6 +668,26 @@
     const aceptados = postulaciones.filter((p) => p.estado === "Perfil egresado generado");
     renderizarPerfilesEgresado(aceptados);
     renderizarVacantesRh(vacantes);
+  }
+
+  function renderizarListaRh(selector, lista, postulaciones, mensajeVacio, puedeDecidir) {
+    const contenedor = $(selector);
+    if (!contenedor) return;
+    contenedor.innerHTML = lista.length ? lista.map((p) => `
+      <article class="item">
+        <div>
+          <h3>${p.nombreRecluta}</h3>
+          <p>${p.tituloVacante} · ${p.estado}</p>
+          ${p.notificacionRh ? `<p><strong>Notificacion:</strong> ${p.notificacionRh}</p>` : ""}
+          <p>CV recibido: ${p.cv?.nombre || "Sin CV adjunto"}</p>
+          <div class="meta"><span>${p.fechaEntrevista}</span><span>${p.entrevistador}</span><span>${p.direccion}</span></div>
+        </div>
+        <div class="acciones">
+          <button class="boton-secundario" data-ver-cv="${p._id}">Ver CV</button>
+          ${puedeDecidir && p.estado === "CV enviado a RH" ? `<button class="boton-exito" data-aceptar="${p._id}">Validar CV para entrevista</button><button class="boton-peligro" data-rechazar="${p._id}">No dar acceso</button>` : `<span class="estado">${p.estado === "Acceso autorizado por RH" ? "Acceso permitido" : p.estado}</span>`}
+        </div>
+      </article>
+    `).join("") : `<p>${mensajeVacio}</p>`;
   }
 
   async function cambiarEstadoRh(id, estado, razonRechazo = "") {
@@ -1017,9 +1079,6 @@
     ventana.document.write(`<iframe src="${contenidoBase64}" style="border:0;width:100%;height:100vh"></iframe>`);
   }
 })();
-
-
-
 
 
 
