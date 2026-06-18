@@ -136,10 +136,10 @@ app.post("/api/correo/validar-token", async (solicitud, respuesta) => {
   });
 
   if (!registro) {
-    return respuesta.status(400).json({ mensaje: "El token no coincide" });
+    return respuesta.status(400).json({ mensaje: "El codigo no coincide" });
   }
   if (registro.expiraEn < new Date()) {
-    return respuesta.status(400).json({ mensaje: "El token expiro. Solicita uno nuevo" });
+    return respuesta.status(400).json({ mensaje: "El codigo expiro. Solicita uno nuevo" });
   }
 
   await obtenerColeccion("tokensCorreo").updateOne(
@@ -171,15 +171,18 @@ app.post("/api/usuarios/registro", async (solicitud, respuesta) => {
     return respuesta.status(409).json({ mensaje: "El usuario ya existe" });
   }
 
-  const tokenValidado = await obtenerColeccion("tokensCorreo").findOne({
-    portal,
-    correo: normalizarCorreo(datos.correo),
-    validado: true,
-    expiraEn: { $gt: new Date() }
-  });
+  const requiereToken = portal === "recluta" || portalPublico;
+  if (requiereToken) {
+    const tokenValidado = await obtenerColeccion("tokensCorreo").findOne({
+      portal,
+      correo: normalizarCorreo(datos.correo),
+      validado: true,
+      expiraEn: { $gt: new Date() }
+    });
 
-  if (!tokenValidado) {
-    return respuesta.status(400).json({ mensaje: "Primero valida el correo electronico con el token enviado" });
+    if (!tokenValidado) {
+      return respuesta.status(400).json({ mensaje: "Primero valida el correo electronico con el codigo enviado" });
+    }
   }
 
   const usuario = {
@@ -518,9 +521,9 @@ async function enviarTokenPorCorreo(destino, token, portal, nombreCompleto = "")
   const usuario = process.env.CORREO_USUARIO;
   const contrasena = process.env.CORREO_CONTRASENA;
 
-  const asunto = `Token de verificacion ContrataT - ${portal.toUpperCase()}`;
-  const texto = `Hola ${nombreCompleto || "usuario"}, tu token de verificacion es ${token}. Expira en 10 minutos.`;
-  const html = `<p>Hola ${nombreCompleto || "usuario"},</p><p>Tu token de verificacion es:</p><h2>${token}</h2><p>Expira en 10 minutos.</p>`;
+  const asunto = `Codigo de verificacion ContrataT - ${portal.toUpperCase()}`;
+  const texto = `Hola ${nombreCompleto || "usuario"}, tu codigo de verificacion ContrataT es ${token}. Expira en 10 minutos.`;
+  const html = `<p>Hola ${nombreCompleto || "usuario"},</p><p>Tu codigo de verificacion ContrataT es:</p><h2>${token}</h2><p>Expira en 10 minutos.</p>`;
 
   if (webhookGmail) {
     const respuesta = await fetch(webhookGmail, {
@@ -540,15 +543,15 @@ async function enviarTokenPorCorreo(destino, token, portal, nombreCompleto = "")
     }
     return {
       modo: "gmail-webhook",
-      mensaje: "Token enviado al correo electronico."
+      mensaje: "Codigo enviado al correo electronico."
     };
   }
 
   if (!host || !usuario || !contrasena) {
-    console.log("Token de correo ContrataT:", { destino, portal, token });
+    console.log("Codigo de correo ContrataT:", { destino, portal, codigo: token });
     return {
       modo: "consola",
-      mensaje: "No hay correo SMTP configurado. Token mostrado en consola del servidor para prueba."
+      mensaje: "No hay correo configurado. Codigo mostrado en consola del servidor para prueba."
     };
   }
 
@@ -573,7 +576,7 @@ async function enviarTokenPorCorreo(destino, token, portal, nombreCompleto = "")
 
   return {
     modo: "correo",
-    mensaje: "Token enviado al correo electronico."
+    mensaje: "Codigo enviado al correo electronico."
   };
 }
 
