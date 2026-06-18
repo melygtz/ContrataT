@@ -90,7 +90,22 @@ app.post("/api/correo/solicitar-token", async (solicitud, respuesta) => {
     { upsert: true }
   );
 
-  const envio = await enviarTokenPorCorreo(correoNormalizado, token, portal, nombreCompleto);
+  let envio;
+  try {
+    envio = await enviarTokenPorCorreo(correoNormalizado, token, portal, nombreCompleto);
+  } catch (error) {
+    console.error("Error al enviar correo ContrataT:", {
+      host: process.env.CORREO_HOST,
+      puerto: process.env.CORREO_PUERTO,
+      seguro: process.env.CORREO_SEGURO,
+      codigo: error.code,
+      comando: error.command,
+      mensaje: error.message
+    });
+    return respuesta.status(502).json({
+      mensaje: "No se pudo enviar el correo. Revisa la configuracion SMTP de Gmail en Render."
+    });
+  }
   await registrarBitacora("token_correo_enviado", portal, correoNormalizado, envio.modo);
 
   respuesta.json({
@@ -363,6 +378,10 @@ async function enviarTokenPorCorreo(destino, token, portal, nombreCompleto = "")
     host,
     port: Number(process.env.CORREO_PUERTO || 587),
     secure: String(process.env.CORREO_SEGURO).toLowerCase() === "true",
+    family: 4,
+    connectionTimeout: 30000,
+    greetingTimeout: 30000,
+    socketTimeout: 60000,
     auth: { user: usuario, pass: contrasena }
   });
 
