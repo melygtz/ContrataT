@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="es">
   <head>
     <meta charset="utf-8">
@@ -38,7 +38,7 @@
           <div class="texto-acceso">
             <h2>!Bienvenido a ContrataT¡</h2>
             <p>Registra tu usuario, consulta vacantes, envia tu CV y captura tu imagen biometrica solamente desde el portal Recluta.</p>
-            <div class="pasos"><span>Registro con token</span><span>Validacion de correo</span><span>Camara autorizada</span><span>Seguimiento RH</span></div>
+            <div class="pasos"><span>Registro con codigo</span><span>Validacion de correo</span><span>Camara autorizada</span><span>Seguimiento RH</span></div>
           </div>
           <div class="panel">
             <div class="pestanas">
@@ -55,15 +55,15 @@
               <label>Correo electronico<input name="correo" type="email" required></label>
               <label>Telefono<input name="telefono" type="tel" required></label>
               <div class="acciones-registro">
-                <button class="boton-secundario" type="button" data-enviar-token>Enviar token al correo</button>
+                <button class="boton-secundario" type="button" data-enviar-token>Enviar codigo al correo</button>
               </div>
               <div class="campos-dobles">
-                <label>Token recibido<input name="tokenCorreo" inputmode="numeric" maxlength="6" required></label>
-                <button class="boton-secundario boton-validar-token" type="button" data-validar-token>Validar token</button>
+                <label>Codigo<input name="tokenCorreo" inputmode="numeric" maxlength="6" required></label>
+                <button class="boton-secundario boton-validar-token" type="button" data-validar-token>Validar codigo</button>
               </div>
               <label class="campo-contrasena oculto">Crear contrasena<input name="contrasena" type="password" minlength="6" disabled required></label>
               <button class="boton-principal">Crear usuario</button>
-              <p class="nota" data-ayuda-token>Primero envia y valida el token para crear tu contrasena.</p>
+              <p class="nota" data-ayuda-token>Primero envia y valida el codigo para crear tu contrasena.</p>
             </form>
           </div>
         </section>
@@ -132,7 +132,6 @@
     <script src="aplicacion.js"></script>
   </body>
 </html>
-
 
 
 
