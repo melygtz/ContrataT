@@ -46,10 +46,18 @@ app.get(["/", "/index.html"], async (_solicitud, respuesta, siguiente) => {
 app.use(express.static(carpetaPublica));
 
 app.get("/api/salud", async (_solicitud, respuesta) => {
+  const conteos = Object.fromEntries(await Promise.all(
+    Object.entries(colecciones).map(async ([clave]) => [
+      clave,
+      await obtenerColeccion(clave).countDocuments()
+    ])
+  ));
+
   respuesta.json({
     estado: "conectado",
     empresa: process.env.NOMBRE_BASE_DATOS || "ContrataT",
     portalPublico: portalPublico ? "recluta" : "completo",
+    conteos,
     colecciones
   });
 });
@@ -216,7 +224,7 @@ app.get("/api/vacantes", async (_solicitud, respuesta) => {
 });
 
 app.post("/api/postulaciones", async (solicitud, respuesta) => {
-  const { reclutaId, vacanteId } = solicitud.body;
+  const { reclutaId, vacanteId, cv } = solicitud.body;
   const recluta = await obtenerColeccion("reclutas").findOne({ _id: new ObjectId(reclutaId) });
   const vacante = await obtenerColeccion("vacantes").findOne({ _id: new ObjectId(vacanteId) });
 
@@ -237,7 +245,16 @@ app.post("/api/postulaciones", async (solicitud, respuesta) => {
     telefonoRecluta: recluta.telefono,
     vacanteId: vacante._id,
     tituloVacante: vacante.titulo,
-    estado: "CV recibido",
+    areaVacante: vacante.area || "",
+    turnoVacante: vacante.turno || "",
+    horarioVacante: vacante.horario || "",
+    ubicacionVacante: vacante.ubicacion || "",
+    queEsVacante: vacante.queEs || "",
+    descripcionVacante: vacante.descripcion || "",
+    cv: cv || null,
+    estado: "CV enviado a RH",
+    notificacionRh: "Nuevo CV recibido desde el portal Recluta.",
+    notificacionReclutaLeida: false,
     fechaEntrevista: obtenerFechaProxima(),
     horaLimite: "17:00",
     entrevistador: "Mariana RH",
@@ -262,6 +279,36 @@ app.get("/api/postulaciones/recluta/:reclutaId", async (solicitud, respuesta) =>
   respuesta.json(await agregarBiometria(postulacion));
 });
 
+app.get("/api/postulaciones/recluta/:reclutaId/historial", async (solicitud, respuesta) => {
+  const reclutaId = new ObjectId(solicitud.params.reclutaId);
+  const postulaciones = await obtenerColeccion("postulaciones")
+    .find({ reclutaId })
+    .sort({ creadaEn: -1 })
+    .toArray();
+
+  respuesta.json({
+    totalAplicaciones: postulaciones.length,
+    contratado: postulaciones.some((postulacion) => postulacion.estado === "Perfil egresado generado"),
+    postulaciones
+  });
+});
+
+app.patch("/api/postulaciones/:id/cancelar", async (solicitud, respuesta) => {
+  const id = new ObjectId(solicitud.params.id);
+  const campos = {
+    estado: "Postulacion cancelada por Recluta",
+    razonRechazo: "El recluta cancelo su postulacion desde el portal.",
+    notificacionRh: "El recluta cancelo su postulacion.",
+    actualizadaEn: new Date()
+  };
+
+  await obtenerColeccion("postulaciones").updateOne({ _id: id }, { $set: campos });
+  await obtenerColeccion("biometria").deleteMany({ postulacionId: id });
+  const postulacion = await obtenerColeccion("postulaciones").findOne({ _id: id });
+  await registrarBitacora("postulacion_cancelada", "recluta", id, postulacion?.nombreRecluta || "");
+  respuesta.json(await agregarBiometria(postulacion));
+});
+
 app.put("/api/postulaciones/:id/biometria", async (solicitud, respuesta) => {
   const id = new ObjectId(solicitud.params.id);
   const postulacion = await obtenerColeccion("postulaciones").findOne({ _id: id });
@@ -283,7 +330,14 @@ app.put("/api/postulaciones/:id/biometria", async (solicitud, respuesta) => {
   );
   await obtenerColeccion("postulaciones").updateOne(
     { _id: id },
-    { $set: { estado: "Esperando validacion RH", actualizadaEn: new Date() } }
+    {
+      $set: {
+        estado: "Biometria pendiente de revision RH",
+        notificacionRh: "El recluta capturo biometria para revision.",
+        notificacionReclutaLeida: false,
+        actualizadaEn: new Date()
+      }
+    }
   );
   await registrarBitacora("biometria_capturada", "recluta", postulacion.reclutaId, postulacion.nombreRecluta);
 
@@ -302,12 +356,44 @@ app.get("/api/rh/postulaciones", soloInterno, async (_solicitud, respuesta) => {
   respuesta.json(await Promise.all(postulaciones.map(agregarBiometria)));
 });
 
+app.get("/api/rh/vacantes", soloInterno, async (_solicitud, respuesta) => {
+  const vacantes = await obtenerColeccion("vacantes").find().sort({ creadaEn: -1 }).toArray();
+  respuesta.json(vacantes);
+});
+
+app.post("/api/rh/vacantes", soloInterno, async (solicitud, respuesta) => {
+  const datos = solicitud.body;
+  const vacante = {
+    clave: "vac-" + Date.now(),
+    titulo: datos.titulo,
+    area: datos.area,
+    horario: datos.horario,
+    turno: datos.turno,
+    ubicacion: datos.ubicacion,
+    queEs: datos.queEs,
+    descripcion: datos.descripcion,
+    activa: true,
+    ocupada: false,
+    creadaEn: new Date(),
+    actualizadaEn: new Date()
+  };
+
+  const resultado = await obtenerColeccion("vacantes").insertOne(vacante);
+  await registrarBitacora("vacante_creada", "rh", resultado.insertedId, vacante.titulo);
+  respuesta.status(201).json({ ...vacante, _id: resultado.insertedId });
+});
+
 app.patch("/api/rh/postulaciones/:id", soloInterno, async (solicitud, respuesta) => {
   const id = new ObjectId(solicitud.params.id);
+  const estado = solicitud.body.estado;
+  const fechaInduccion = estado === "Perfil egresado generado" ? obtenerFechaProxima() : "";
+  const mensajeAutomatico = obtenerMensajeAutomatico(estado, solicitud.body.razonRechazo);
   const campos = {
-    estado: solicitud.body.estado,
+    estado,
     razonRechazo: solicitud.body.razonRechazo || "",
-    fechaInduccion: solicitud.body.estado === "Aceptado" ? obtenerFechaProxima() : "",
+    mensajeAutomatico,
+    notificacionReclutaLeida: false,
+    ...(fechaInduccion ? { fechaInduccion } : {}),
     actualizadaEn: new Date()
   };
 
@@ -318,13 +404,35 @@ app.patch("/api/rh/postulaciones/:id", soloInterno, async (solicitud, respuesta)
 });
 
 app.get("/api/seguridad/accesos", soloInterno, async (_solicitud, respuesta) => {
-  const accesos = await obtenerColeccion("postulaciones").find({ estado: "Aceptado" }).sort({ actualizadaEn: -1 }).toArray();
+  const accesos = await obtenerColeccion("postulaciones")
+    .find({ estado: { $in: ["Acceso listo para Seguridad", "Acceso verificado por Seguridad", "Perfil egresado generado"] } })
+    .sort({ actualizadaEn: -1 })
+    .toArray();
   respuesta.json(await Promise.all(accesos.map(agregarBiometria)));
 });
 
 app.get("/api/seguridad/rechazados", soloInterno, async (_solicitud, respuesta) => {
-  const rechazados = await obtenerColeccion("postulaciones").find({ estado: "Rechazado" }).sort({ actualizadaEn: -1 }).toArray();
+  const rechazados = await obtenerColeccion("postulaciones")
+    .find({ estado: { $in: ["Acceso negado por RH", "Acceso negado por Seguridad", "Acceso vencido", "No asistio a entrevista", "No aceptado despues de entrevista"] } })
+    .sort({ actualizadaEn: -1 })
+    .toArray();
   respuesta.json(await Promise.all(rechazados.map(agregarBiometria)));
+});
+
+app.patch("/api/seguridad/accesos/:id/validar", soloInterno, async (solicitud, respuesta) => {
+  const id = new ObjectId(solicitud.params.id);
+  const coincide = Boolean(solicitud.body.coincide);
+  const campos = {
+    estado: coincide ? "Acceso verificado por Seguridad" : "Acceso negado por Seguridad",
+    capturaSeguridad: solicitud.body.capturaSeguridad || "",
+    razonRechazo: coincide ? "" : "La captura de seguridad no coincide con la biometria registrada.",
+    actualizadaEn: new Date()
+  };
+
+  await obtenerColeccion("postulaciones").updateOne({ _id: id }, { $set: campos });
+  const postulacion = await obtenerColeccion("postulaciones").findOne({ _id: id });
+  await registrarBitacora("validacion_seguridad", "seguridad", id, campos.estado);
+  respuesta.json(await agregarBiometria(postulacion));
 });
 
 app.patch("/api/seguridad/accesos/:id/cerrar", soloInterno, async (solicitud, respuesta) => {
@@ -336,6 +444,26 @@ app.patch("/api/seguridad/accesos/:id/cerrar", soloInterno, async (solicitud, re
   const postulacion = await obtenerColeccion("postulaciones").findOne({ _id: id });
   await registrarBitacora("acceso_cerrado", "seguridad", id, postulacion?.nombreRecluta || "");
   respuesta.json(postulacion);
+});
+
+app.get("/api/notificaciones/recluta/:reclutaId", async (solicitud, respuesta) => {
+  const reclutaId = new ObjectId(solicitud.params.reclutaId);
+  const noLeidas = await obtenerColeccion("postulaciones").countDocuments({
+    reclutaId,
+    notificacionReclutaLeida: false,
+    mensajeAutomatico: { $exists: true, $ne: "" }
+  });
+
+  respuesta.json({ noLeidas });
+});
+
+app.patch("/api/notificaciones/recluta/:reclutaId/leer", async (solicitud, respuesta) => {
+  const reclutaId = new ObjectId(solicitud.params.reclutaId);
+  await obtenerColeccion("postulaciones").updateMany(
+    { reclutaId },
+    { $set: { notificacionReclutaLeida: true } }
+  );
+  respuesta.json({ mensaje: "Notificaciones marcadas como leidas" });
 });
 
 app.get("*", (_solicitud, respuesta) => {
@@ -445,6 +573,21 @@ async function registrarBitacora(accion, seccion, referenciaId, detalle) {
     detalle,
     fecha: new Date()
   });
+}
+
+function obtenerMensajeAutomatico(estado, razonRechazo = "") {
+  const mensajes = {
+    "Acceso autorizado por RH": "RH valido tu CV. Ya puedes registrar tus datos biometricos para continuar con la entrevista.",
+    "Acceso negado por RH": razonRechazo || "RH no autorizo tu CV para entrevista.",
+    "Biometria rechazada por RH": razonRechazo || "RH no valido tu imagen biometrica. Debes capturarla nuevamente.",
+    "Acceso listo para Seguridad": "RH valido tu biometria. Tu entrevista ya fue agendada y Seguridad podra verificar tu acceso.",
+    "Asistio a entrevista": "RH registro que asististe a entrevista. Espera el resultado final.",
+    "No asistio a entrevista": razonRechazo || "RH registro que no asististe a la entrevista.",
+    "No aceptado despues de entrevista": razonRechazo || "RH registro que no fuiste aceptado despues de la entrevista.",
+    "Perfil egresado generado": "Felicidades. RH genero tu perfil de nuevo ingreso y tu acceso planta."
+  };
+
+  return mensajes[estado] || "";
 }
 
 function obtenerFechaProxima() {
