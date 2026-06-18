@@ -5,10 +5,10 @@
   "type": "module",
   "main": "servidor/servidor.js",
   "scripts": {
-    "start": "node servidor/servidor.js",
-    "iniciar": "node servidor/servidor.js",
-    "dev": "node --watch servidor/servidor.js",
-    "verificar": "node --check servidor/servidor.js",
+    "start": "node --use-system-ca servidor/servidor.js",
+    "iniciar": "node --use-system-ca servidor/servidor.js",
+    "dev": "node --use-system-ca --watch servidor/servidor.js",
+    "verificar": "node --use-system-ca --check servidor/servidor.js",
     "crear-base": "py herramientas/crear_base_datos.py"
   },
   "keywords": [
