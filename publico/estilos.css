@@ -1,4 +1,4 @@
-﻿:root {
+:root {
   --texto: #17212b;
   --gris: #637181;
   --linea: #dbe3ea;
@@ -39,14 +39,11 @@ a { color: inherit; text-decoration: none; }
 }
 .marca { display: flex; align-items: center; gap: 12px; width: fit-content; }
 .logo {
-  display: grid;
   width: 46px;
   height: 46px;
-  place-items: center;
   border-radius: 14px;
-  color: white;
-  font-weight: 900;
-  background: linear-gradient(145deg, var(--principal), #12343b);
+  object-fit: cover;
+  background: white;
   box-shadow: 0 10px 25px rgba(15, 118, 110, .28);
 }
 .marca strong { display: block; font-size: 1.08rem; }
@@ -143,6 +140,27 @@ textarea {
   border: 1px solid var(--linea);
   border-radius: 8px;
   padding: 10px 12px;
+}
+.campo-password {
+  position: relative;
+  display: grid;
+}
+.campo-password input {
+  padding-right: 96px;
+}
+.boton-ver-password {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 1px solid var(--linea);
+  border-radius: 7px;
+  color: var(--principal-oscuro);
+  background: #e8f4f2;
+  font-size: .82rem;
+  font-weight: 850;
+  transform: translateY(-50%);
 }
 textarea {
   min-height: 92px;
