@@ -16,12 +16,35 @@
 
   function iniciar() {
     configurarPestanas();
+    configurarContrasenasVisibles();
     configurarRegistroInterno();
     configurarMenu();
     configurarSesion();
     configurarCamara();
     configurarVacantesRh();
     renderizar();
+  }
+
+  function configurarContrasenasVisibles() {
+    // Nota: agrega el boton Mostrar/Ocultar a todas las contrasenas de login y registro.
+    $$("input[type='password']").forEach((input) => {
+      if (input.parentElement?.classList.contains("campo-password")) return;
+      const contenedor = document.createElement("div");
+      contenedor.className = "campo-password";
+      input.parentNode.insertBefore(contenedor, input);
+      contenedor.appendChild(input);
+
+      const boton = document.createElement("button");
+      boton.type = "button";
+      boton.className = "boton-ver-password";
+      boton.textContent = "Mostrar";
+      boton.addEventListener("click", () => {
+        const mostrar = input.type === "password";
+        input.type = mostrar ? "text" : "password";
+        boton.textContent = mostrar ? "Ocultar" : "Mostrar";
+      });
+      contenedor.appendChild(boton);
+    });
   }
 
   function configurarRegistroInterno() {
@@ -251,6 +274,8 @@
 
   async function renderizar() {
     const sesionValida = usuario && usuario.portal === portal;
+    // Nota: los botones de inicio/cerrar sesion solo aparecen cuando ya hay sesion iniciada.
+    $(".sesion")?.classList.toggle("oculto", !sesionValida);
     $("#vistaAcceso")?.classList.toggle("oculto", Boolean(sesionValida));
     $("#vistaApp")?.classList.toggle("oculto", !sesionValida);
     if ($("#nombreUsuario")) $("#nombreUsuario").textContent = sesionValida ? usuario.nombreCompleto + (usuario.contratado || usuario.tipoUsuario === "empleado" ? " · Empleado" : "") : "Invitado";
@@ -1079,7 +1104,6 @@
     ventana.document.write(`<iframe src="${contenidoBase64}" style="border:0;width:100%;height:100vh"></iframe>`);
   }
 })();
-
 
 
 
