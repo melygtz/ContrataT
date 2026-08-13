@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Seguridad | ContrataT</title>
+    <link rel="stylesheet" href="estilos.css">
+  </head>
+  <body data-portal="seguridad">
+    <div class="contenedor-app">
+      <header class="barra-superior">
+        <a class="marca" href="seguridad.html"><img class="logo" src="logo.png" alt="ContrataT"><span><strong>ContrataT</strong><small>Seguridad patrimonial</small></span></a>
+        <nav class="cambio-portal"><a href="index.html">Recluta</a><a href="rh.html">RH</a><a class="activo" href="seguridad.html">Seguridad</a></nav>
+        <div class="sesion"><span id="nombreUsuario">Invitado</span><button class="boton-claro" data-inicio>Ir a inicio</button><button class="boton-claro" data-cerrar>Cerrar sesión</button></div>
+      </header>
+      <main>
+        <section class="hero seguridad"><div><p class="etiqueta">Portal Seguridad</p><h1>Control de acceso temporal y validación visual.</h1></div><div class="indicador"><span>Accesos activos</span><strong id="totalAccesos">0</strong></div></section>
+        <section id="vistaAcceso" class="acceso">
+          <div class="texto-acceso"><h2>Acceso de Seguridad</h2><p>Consulta reclutas aceptados, datos de entrevista, razón de rechazo e imagen biométrica capturada en Recluta.</p><div class="pasos"><span>Acceso temporal</span><span>Datos recluta</span><span>Biometría</span><span>Cierre de acceso</span></div></div>
+          <div class="panel">
+            <div class="pestanas"><button class="pestana activo" data-auth-tab="login">Iniciar sesión</button><button class="pestana" data-auth-tab="registro">Registrarse</button></div>
+            <form id="formLogin" class="formulario" data-auth-panel="login"><label>Número de reloj<input name="numeroReloj" required></label><label>Contraseña<input name="contrasena" type="password" required></label><button class="boton-principal">Entrar a Seguridad</button></form>
+            <form id="formRegistro" class="formulario oculto" data-auth-panel="registro"><label>Nombre completo<input name="nombreCompleto" required></label><label>Número de reloj<input name="numeroReloj" required></label><label>Correo electrónico<input name="correo" type="email" required></label><div class="acciones-registro"><button class="boton-secundario" type="button" data-enviar-token>Enviar código al correo</button></div><div class="campos-dobles"><label>Código<input name="tokenCorreo" inputmode="numeric" maxlength="6" required></label><button class="boton-secundario boton-validar-token" type="button" data-validar-token>Validar código</button></div><label class="campo-contrasena oculto">Crear contraseña<input name="contrasena" type="password" minlength="6" disabled required></label><button class="boton-principal">Crear usuario Seguridad</button><p class="nota" data-ayuda-token>Primero envía y valida el código para crear tu contraseña.</p></form>
+          </div>
+        </section>
+        <section id="vistaApp" class="area-trabajo oculto">
+          <aside class="menu-lateral"><button class="opcion activo" data-seccion="dashboard">Dashboard</button><button class="opcion" data-seccion="accesos">Ver accesos</button><button class="opcion" data-seccion="rechazados">Rechazados</button></aside>
+          <div class="contenido">
+            <section class="seccion activo" data-panel="dashboard"><div class="titulo-seccion"><p class="etiqueta">Control interno</p><h2>Propuesta de seguridad</h2></div><div class="rejilla-info"><article><h3>Qué es</h3><p>Módulo para confirmar que el candidato aceptado corresponde con la visita autorizada.</p></article><article><h3>Qué hace</h3><p>Muestra datos del recluta, fecha, hora límite, entrevistador, dirección y biometría.</p></article><article><h3>Valores</h3><p>Confidencialidad, custodia de datos, puntualidad y acceso limitado.</p></article></div></section>
+            <section class="seccion" data-panel="accesos"><div class="titulo-seccion"><p class="etiqueta">Ver accesos</p><h2>Candidatos con biometría lista</h2></div><div id="listaAccesos" class="lista"></div><div id="panelVerificacionSeguridad" class="camara-grid oculto"><div class="tarjeta"><h3>Cámara ESP32-CAM</h3><img id="videoSeguridad" class="vista-esp32" alt="Vista actual de la cámara ESP32-CAM"><canvas id="canvasSeguridad" width="640" height="480" class="oculto"></canvas><div class="acciones"><button id="configurarCamaraEsp32" class="boton-claro" type="button">Configurar IP</button><button id="capturarSeguridad" class="boton-secundario" type="button">Capturar rostro actual</button><button id="confirmarCoincide" class="boton-exito" type="button">Rostro coincide</button><button id="confirmarNoCoincide" class="boton-peligro" type="button">No coincide</button></div></div><div class="panel"><h3>Comparación visual</h3><p>Compara la imagen biométrica guardada por Recluta contra la captura actual del ESP32-CAM.</p><div id="comparacionSeguridad" class="biometria-grid"></div></div></div></section>
+            <section class="seccion" data-panel="rechazados"><div class="titulo-seccion"><p class="etiqueta">Datos del rechazado</p><h2>Razón de rechazo</h2></div><div id="listaRechazados" class="lista"></div></section>
+          </div>
+        </section>
+      </main>
+    </div>
+    <div id="mensaje" class="mensaje"></div>
+    <script src="aplicacion.js"></script>
+  </body>
+</html>
