@@ -1,0 +1,629 @@
+import cors from "cors";
+import express from "express";
+import { readFile } from "node:fs/promises";
+import path from "path";
+import { fileURLToPath } from "url";
+import dotenv from "dotenv";
+import nodemailer from "nodemailer";
+import { ObjectId } from "mongodb";
+import { colecciones, conectarBaseDatos, obtenerColeccion } from "./conexion.js";
+
+
+dotenv.config();
+
+const app = express();
+const puerto = Number(process.env.PORT || process.env.PUERTO || 3000);
+const portalPublico = process.env.PORTAL_PUBLICO === "recluta";
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const carpetaPublica = path.join(__dirname, "..", "publico");
+
+app.use(cors());
+app.use(express.json({ limit: "12mb" }));
+app.use((solicitud, respuesta, siguiente) => {
+  respuesta.locals.portalPublico = portalPublico;
+  siguiente();
+});
+app.use((solicitud, respuesta, siguiente) => {
+  if (portalPublico && ["/rh.html", "/seguridad.html"].includes(solicitud.path)) {
+    return respuesta.redirect("/");
+  }
+  siguiente();
+});
+app.get(["/", "/index.html"], async (_solicitud, respuesta, siguiente) => {
+  if (!portalPublico) return siguiente();
+
+  try {
+    const index = await readFile(path.join(carpetaPublica, "index.html"), "utf8");
+    respuesta.type("html").send(index.replace(
+      /<nav class="cambio-portal">[\s\S]*?<\/nav>/,
+      '<nav class="cambio-portal"><a class="activo" href="index.html">Recluta</a></nav>'
+    ));
+  } catch (error) {
+    siguiente(error);
+  }
+});
+app.use(express.static(carpetaPublica));
+
+app.get("/api/salud", async (_solicitud, respuesta) => {
+  const conteos = Object.fromEntries(await Promise.all(
+    Object.entries(colecciones).map(async ([clave]) => [
+      clave,
+      await obtenerColeccion(clave).countDocuments()
+    ])
+  ));
+
+  respuesta.json({
+    estado: "conectado",
+    empresa: process.env.NOMBRE_BASE_DATOS || "ContrataT",
+    portalPublico: portalPublico ? "recluta" : "completo",
+    conteos,
+    colecciones
+  });
+});
+
+app.post("/api/correo/solicitar-token", async (solicitud, respuesta) => {
+  const { portal, correo, numeroReloj, nombreCompleto } = solicitud.body;
+  if (portalPublico && portal !== "recluta") {
+    return respuesta.status(403).json({ mensaje: "Este servicio público solo permite el portal Recluta" });
+  }
+  if (!["recluta", "rh", "seguridad"].includes(portal)) {
+    return respuesta.status(400).json({ mensaje: "Portal inválido" });
+  }
+  if (!correo) {
+    return respuesta.status(400).json({ mensaje: "Escribe un correo electrónico" });
+  }
+  if ((portal === "rh" || portal === "seguridad") && !numeroReloj) {
+    return respuesta.status(400).json({ mensaje: "Escribe el número de reloj del empleado" });
+  }
+
+  const token = generarTokenCorreo();
+  const expiraEn = new Date(Date.now() + 10 * 60 * 1000);
+  const correoNormalizado = normalizarCorreo(correo);
+
+  await obtenerColeccion("tokensCorreo").updateOne(
+    { portal, correo: correoNormalizado },
+    {
+      $set: {
+        portal,
+        correo: correoNormalizado,
+        numeroReloj: numeroReloj || "",
+        nombreCompleto: nombreCompleto || "",
+        token,
+        validado: false,
+        creadoEn: new Date(),
+        expiraEn
+      }
+    },
+    { upsert: true }
+  );
+
+  let envio;
+  try {
+    envio = await enviarTokenPorCorreo(correoNormalizado, token, portal, nombreCompleto);
+  } catch (error) {
+    console.error("Error al enviar correo ContrataT:", {
+      host: process.env.CORREO_HOST,
+      puerto: process.env.CORREO_PUERTO,
+      seguro: process.env.CORREO_SEGURO,
+      codigo: error.code,
+      comando: error.command,
+      mensaje: error.message
+    });
+    return respuesta.status(502).json({
+      mensaje: "No se pudo enviar el correo. Revisa la configuracion SMTP de Gmail en Render."
+    });
+  }
+  await registrarBitacora("token_correo_enviado", portal, correoNormalizado, envio.modo);
+
+  respuesta.json({
+    mensaje: envio.mensaje,
+    modo: envio.modo,
+    tokenPrueba: envio.modo === "consola" ? token : undefined
+  });
+});
+
+app.post("/api/correo/validar-token", async (solicitud, respuesta) => {
+  const { portal, correo, token } = solicitud.body;
+  if (portalPublico && portal !== "recluta") {
+    return respuesta.status(403).json({ mensaje: "Este servicio publico solo permite el portal Recluta" });
+  }
+  const correoNormalizado = normalizarCorreo(correo);
+  const registro = await obtenerColeccion("tokensCorreo").findOne({
+    portal,
+    correo: correoNormalizado,
+    token: (token || "").trim()
+  });
+
+  if (!registro) {
+    return respuesta.status(400).json({ mensaje: "El código no coincide" });
+  }
+  if (registro.expiraEn < new Date()) {
+    return respuesta.status(400).json({ mensaje: "El código expiró. Solicita uno nuevo" });
+  }
+
+  await obtenerColeccion("tokensCorreo").updateOne(
+    { _id: registro._id },
+    { $set: { validado: true, validadoEn: new Date() } }
+  );
+  await registrarBitacora("token_correo_validado", portal, correoNormalizado, registro.nombreCompleto || "");
+  respuesta.json({ mensaje: "Correo validado. Ya puedes crear tu contraseña" });
+});
+
+app.post("/api/usuarios/registro", async (solicitud, respuesta) => {
+  const datos = solicitud.body;
+  const portal = datos.portal;
+  if (portalPublico && portal !== "recluta") {
+    return respuesta.status(403).json({ mensaje: "Este servicio publico solo permite el portal Recluta" });
+  }
+
+  if (!["recluta", "rh", "seguridad"].includes(portal)) {
+    return respuesta.status(400).json({ mensaje: "Portal invalido" });
+  }
+
+  const coleccion = obtenerColeccion(portal === "recluta" ? "reclutas" : portal);
+  const filtroExiste = portal === "recluta"
+    ? { correo: normalizarCorreo(datos.correo) }
+    : { numeroReloj: datos.numeroReloj };
+
+  const existe = await coleccion.findOne(filtroExiste);
+  if (existe) {
+    return respuesta.status(409).json({ mensaje: "El usuario ya existe" });
+  }
+
+  const requiereToken = portal === "recluta" || portalPublico;
+    if (requiereToken) {
+    const tokenValidado = await obtenerColeccion("tokensCorreo").findOne({
+      portal,
+      correo: normalizarCorreo(datos.correo),
+      validado: true,
+      expiraEn: { $gt: new Date() }
+    });
+
+    if (!tokenValidado) {
+      return respuesta.status(400).json({ mensaje: "Primero valida el correo electrónico con el código enviado" });
+    }
+  }
+
+  const usuario = {
+    nombreCompleto: datos.nombreCompleto,
+    correo: normalizarCorreo(datos.correo),
+    telefono: datos.telefono || "",
+    numeroReloj: datos.numeroReloj || "",
+    contrasena: datos.contrasena,
+    rol: portal,
+    creadoEn: new Date()
+  };
+
+  const resultado = await coleccion.insertOne(usuario);
+  await obtenerColeccion("tokensCorreo").deleteMany({ portal, correo: usuario.correo });
+  await registrarBitacora("registro_usuario", portal, resultado.insertedId, usuario.nombreCompleto);
+
+  respuesta.status(201).json(limpiarUsuario({ ...usuario, _id: resultado.insertedId }));
+});
+
+app.post("/api/usuarios/sesion", async (solicitud, respuesta) => {
+  const { portal, correo, numeroReloj, contrasena } = solicitud.body;
+  if (portalPublico && portal !== "recluta") {
+    return respuesta.status(403).json({ mensaje: "Este servicio publico solo permite el portal Recluta" });
+  }
+  const coleccion = obtenerColeccion(portal === "recluta" ? "reclutas" : portal);
+  const filtro = portal === "recluta"
+    ? { correo: normalizarCorreo(correo), contrasena }
+    : { numeroReloj, contrasena };
+
+  const usuario = await coleccion.findOne(filtro);
+  if (!usuario) {
+    return respuesta.status(401).json({ mensaje: "No existe el usuario o la contraseña no coincide" });
+  }
+
+  await registrarBitacora("inicio_sesion", portal, usuario._id, usuario.nombreCompleto);
+  respuesta.json(limpiarUsuario(usuario));
+});
+
+app.get("/api/vacantes", async (_solicitud, respuesta) => {
+  const vacantes = await obtenerColeccion("vacantes").find({ activa: true }).sort({ creadaEn: 1 }).toArray();
+  respuesta.json(vacantes);
+});
+
+app.post("/api/postulaciones", async (solicitud, respuesta) => {
+  const { reclutaId, vacanteId, cv } = solicitud.body;
+  const recluta = await obtenerColeccion("reclutas").findOne({ _id: new ObjectId(reclutaId) });
+  const vacante = await obtenerColeccion("vacantes").findOne({ _id: new ObjectId(vacanteId) });
+
+  if (!recluta || !vacante) {
+    return respuesta.status(404).json({ mensaje: "Recluta o vacante no encontrada" });
+  }
+
+  const postulaciones = obtenerColeccion("postulaciones");
+  const estadosFinalizados = [
+    "Postulacion cancelada por Recluta",
+    "Acceso cerrado",
+    "Acceso negado por RH",
+    "Acceso negado por Seguridad",
+    "Acceso vencido",
+    "No asistio a entrevista",
+    "No aceptado despues de entrevista"
+  ];
+  const existente = await postulaciones.findOne({
+    reclutaId: recluta._id,
+    estado: { $nin: estadosFinalizados }
+  });
+  if (existente) {
+    if (cv) {
+      const camposActualizados = {
+        cv,
+        estado: "CV enviado a RH",
+        notificacionRh: "CV actualizado desde el portal Recluta.",
+        notificacionReclutaLeida: false,
+        actualizadaEn: new Date()
+      };
+      await postulaciones.updateOne({ _id: existente._id }, { $set: camposActualizados });
+      const actualizado = await postulaciones.findOne({ _id: existente._id });
+      await registrarBitacora("cv_actualizado", "recluta", recluta._id, recluta.nombreCompleto);
+      return respuesta.json(actualizado);
+    }
+    return respuesta.json(existente);
+  }
+
+  const postulacion = {
+    reclutaId: recluta._id,
+    nombreRecluta: recluta.nombreCompleto,
+    correoRecluta: recluta.correo,
+    telefonoRecluta: recluta.telefono,
+    vacanteId: vacante._id,
+    tituloVacante: vacante.titulo,
+    areaVacante: vacante.area || "",
+    turnoVacante: vacante.turno || "",
+    horarioVacante: vacante.horario || "",
+    ubicacionVacante: vacante.ubicacion || "",
+    queEsVacante: vacante.queEs || "",
+    descripcionVacante: vacante.descripcion || "",
+    cv: cv || null,
+    estado: "CV enviado a RH",
+    notificacionRh: "Nuevo CV recibido desde el portal Recluta.",
+    notificacionReclutaLeida: false,
+    fechaEntrevista: obtenerFechaProxima(),
+    horaLimite: "17:00",
+    entrevistador: "Mariana RH",
+    direccion: "Av. Horizonte 214, Parque Industrial Nova",
+    creadaEn: new Date(),
+    actualizadaEn: new Date()
+  };
+
+  const resultado = await postulaciones.insertOne(postulacion);
+  await registrarBitacora("postulacion_creada", "recluta", recluta._id, recluta.nombreCompleto);
+  respuesta.status(201).json({ ...postulacion, _id: resultado.insertedId });
+});
+
+app.get("/api/postulaciones/recluta/:reclutaId", async (solicitud, respuesta) => {
+  const postulacion = await obtenerColeccion("postulaciones")
+    .find({ reclutaId: new ObjectId(solicitud.params.reclutaId) })
+    .sort({ creadaEn: -1 })
+    .limit(1)
+    .next();
+
+  if (!postulacion) return respuesta.json(null);
+  respuesta.json(await agregarBiometria(postulacion));
+});
+
+app.get("/api/postulaciones/recluta/:reclutaId/historial", async (solicitud, respuesta) => {
+  const reclutaId = new ObjectId(solicitud.params.reclutaId);
+  const postulaciones = await obtenerColeccion("postulaciones")
+    .find({ reclutaId })
+    .sort({ creadaEn: -1 })
+    .toArray();
+
+  respuesta.json({
+    totalAplicaciones: postulaciones.length,
+    contratado: postulaciones.some((postulacion) => postulacion.estado === "Perfil egresado generado"),
+    postulaciones
+  });
+});
+
+app.patch("/api/postulaciones/:id/cancelar", async (solicitud, respuesta) => {
+  const id = new ObjectId(solicitud.params.id);
+  const campos = {
+    estado: "Postulacion cancelada por Recluta",
+    razonRechazo: "El recluta cancelo su postulacion desde el portal.",
+    notificacionRh: "El recluta cancelo su postulacion.",
+    actualizadaEn: new Date()
+  };
+
+  await obtenerColeccion("postulaciones").updateOne({ _id: id }, { $set: campos });
+  await obtenerColeccion("biometria").deleteMany({ postulacionId: id });
+  const postulacion = await obtenerColeccion("postulaciones").findOne({ _id: id });
+  await registrarBitacora("postulacion_cancelada", "recluta", id, postulacion?.nombreRecluta || "");
+  respuesta.json(await agregarBiometria(postulacion));
+});
+
+app.put("/api/postulaciones/:id/biometria", async (solicitud, respuesta) => {
+  const id = new ObjectId(solicitud.params.id);
+  const postulacion = await obtenerColeccion("postulaciones").findOne({ _id: id });
+  if (!postulacion) return respuesta.status(404).json({ mensaje: "Postulacion no encontrada" });
+
+  const biometria = {
+    postulacionId: id,
+    reclutaId: postulacion.reclutaId,
+    nombreRecluta: postulacion.nombreRecluta,
+    imagenBase64: solicitud.body.imagenBase64,
+    aceptoPrivacidad: Boolean(solicitud.body.aceptoPrivacidad),
+    capturadaEn: new Date()
+  };
+
+  await obtenerColeccion("biometria").updateOne(
+    { postulacionId: id },
+    { $set: biometria },
+    { upsert: true }
+  );
+  await obtenerColeccion("postulaciones").updateOne(
+    { _id: id },
+    {
+      $set: {
+        estado: "Biometria pendiente de revision RH",
+        notificacionRh: "El recluta capturo biometria para revision.",
+        notificacionReclutaLeida: false,
+        actualizadaEn: new Date()
+      }
+    }
+  );
+  await registrarBitacora("biometria_capturada", "recluta", postulacion.reclutaId, postulacion.nombreRecluta);
+
+  respuesta.json(await agregarBiometria({ ...postulacion, estado: "Esperando validacion RH" }));
+});
+
+const soloInterno = (solicitud, respuesta, siguiente) => {
+  if (portalPublico) {
+    return respuesta.status(404).json({ mensaje: "Ruta disponible solo en el sistema interno" });
+  }
+  siguiente();
+};
+
+app.get("/api/rh/postulaciones", soloInterno, async (_solicitud, respuesta) => {
+  const postulaciones = await obtenerColeccion("postulaciones").find().sort({ creadaEn: -1 }).toArray();
+  respuesta.json(await Promise.all(postulaciones.map(agregarBiometria)));
+});
+
+app.get("/api/rh/vacantes", soloInterno, async (_solicitud, respuesta) => {
+  const vacantes = await obtenerColeccion("vacantes").find().sort({ creadaEn: -1 }).toArray();
+  respuesta.json(vacantes);
+});
+
+app.post("/api/rh/vacantes", soloInterno, async (solicitud, respuesta) => {
+  const datos = solicitud.body;
+  const vacante = {
+    clave: "vac-" + Date.now(),
+    titulo: datos.titulo,
+    area: datos.area,
+    horario: datos.horario,
+    turno: datos.turno,
+    ubicacion: datos.ubicacion,
+    queEs: datos.queEs,
+    descripcion: datos.descripcion,
+    activa: true,
+    ocupada: false,
+    creadaEn: new Date(),
+    actualizadaEn: new Date()
+  };
+
+  const resultado = await obtenerColeccion("vacantes").insertOne(vacante);
+  await registrarBitacora("vacante_creada", "rh", resultado.insertedId, vacante.titulo);
+  respuesta.status(201).json({ ...vacante, _id: resultado.insertedId });
+});
+
+app.patch("/api/rh/postulaciones/:id", soloInterno, async (solicitud, respuesta) => {
+  const id = new ObjectId(solicitud.params.id);
+  const estado = solicitud.body.estado;
+  const fechaInduccion = estado === "Perfil egresado generado" ? obtenerFechaProxima() : "";
+  const mensajeAutomatico = obtenerMensajeAutomatico(estado, solicitud.body.razonRechazo);
+  const campos = {
+    estado,
+    razonRechazo: solicitud.body.razonRechazo || "",
+    mensajeAutomatico,
+    notificacionReclutaLeida: false,
+    ...(fechaInduccion ? { fechaInduccion } : {}),
+    actualizadaEn: new Date()
+  };
+
+  await obtenerColeccion("postulaciones").updateOne({ _id: id }, { $set: campos });
+  const postulacion = await obtenerColeccion("postulaciones").findOne({ _id: id });
+  await registrarBitacora("respuesta_rh", "rh", id, campos.estado);
+  respuesta.json(await agregarBiometria(postulacion));
+});
+
+app.get("/api/seguridad/accesos", soloInterno, async (_solicitud, respuesta) => {
+  const accesos = await obtenerColeccion("postulaciones")
+    .find({ estado: { $in: ["Acceso listo para Seguridad", "Acceso verificado por Seguridad", "Perfil egresado generado"] } })
+    .sort({ actualizadaEn: -1 })
+    .toArray();
+  respuesta.json(await Promise.all(accesos.map(agregarBiometria)));
+});
+
+app.get("/api/seguridad/rechazados", soloInterno, async (_solicitud, respuesta) => {
+  const rechazados = await obtenerColeccion("postulaciones")
+    .find({ estado: { $in: ["Acceso negado por RH", "Acceso negado por Seguridad", "Acceso vencido", "No asistio a entrevista", "No aceptado despues de entrevista"] } })
+    .sort({ actualizadaEn: -1 })
+    .toArray();
+  respuesta.json(await Promise.all(rechazados.map(agregarBiometria)));
+});
+
+app.patch("/api/seguridad/accesos/:id/validar", soloInterno, async (solicitud, respuesta) => {
+  const id = new ObjectId(solicitud.params.id);
+  const coincide = Boolean(solicitud.body.coincide);
+  const campos = {
+    estado: coincide ? "Acceso verificado por Seguridad" : "Acceso negado por Seguridad",
+    capturaSeguridad: solicitud.body.capturaSeguridad || "",
+    razonRechazo: coincide ? "" : "La captura de seguridad no coincide con la biometria registrada.",
+    actualizadaEn: new Date()
+  };
+
+  await obtenerColeccion("postulaciones").updateOne({ _id: id }, { $set: campos });
+  const postulacion = await obtenerColeccion("postulaciones").findOne({ _id: id });
+  await registrarBitacora("validacion_seguridad", "seguridad", id, campos.estado);
+  respuesta.json(await agregarBiometria(postulacion));
+});
+
+app.patch("/api/seguridad/accesos/:id/cerrar", soloInterno, async (solicitud, respuesta) => {
+  const id = new ObjectId(solicitud.params.id);
+  await obtenerColeccion("postulaciones").updateOne(
+    { _id: id },
+    { $set: { estado: "Acceso cerrado", accesoCerradoEn: new Date(), actualizadaEn: new Date() } }
+  );
+  const postulacion = await obtenerColeccion("postulaciones").findOne({ _id: id });
+  await registrarBitacora("acceso_cerrado", "seguridad", id, postulacion?.nombreRecluta || "");
+  respuesta.json(postulacion);
+});
+
+app.get("/api/notificaciones/recluta/:reclutaId", async (solicitud, respuesta) => {
+  const reclutaId = new ObjectId(solicitud.params.reclutaId);
+  const noLeidas = await obtenerColeccion("postulaciones").countDocuments({
+    reclutaId,
+    notificacionReclutaLeida: false,
+    mensajeAutomatico: { $exists: true, $ne: "" }
+  });
+
+  respuesta.json({ noLeidas });
+});
+
+app.patch("/api/notificaciones/recluta/:reclutaId/leer", async (solicitud, respuesta) => {
+  const reclutaId = new ObjectId(solicitud.params.reclutaId);
+  await obtenerColeccion("postulaciones").updateMany(
+    { reclutaId },
+    { $set: { notificacionReclutaLeida: true } }
+  );
+  respuesta.json({ mensaje: "Notificaciones marcadas como leidas" });
+});
+
+app.get("*", (_solicitud, respuesta) => {
+  respuesta.sendFile(path.join(carpetaPublica, "index.html"));
+});
+
+await conectarBaseDatos();
+
+app.listen(puerto, () => {
+  console.log(`ContrataT disponible en http://localhost:${puerto}`);
+  console.log(`Modo: ${portalPublico ? "portal publico Recluta" : "sistema completo local"}`);
+  console.log(`Base de datos: ${process.env.NOMBRE_BASE_DATOS || "ContrataT"}`);
+});
+
+function normalizarCorreo(correo = "") {
+  return correo.trim().toLowerCase();
+}
+
+function generarTokenCorreo() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+async function enviarTokenPorCorreo(destino, token, portal, nombreCompleto = "") {
+  const webhookGmail = process.env.CORREO_WEBHOOK_URL;
+  const secretoWebhook = process.env.CORREO_WEBHOOK_SECRETO;
+  const host = process.env.CORREO_HOST;
+  const usuario = process.env.CORREO_USUARIO;
+  const contrasena = process.env.CORREO_CONTRASENA;
+
+  const asunto = `Código de verificación ContrataT - ${portal.toUpperCase()}`;
+  const texto = `Hola ${nombreCompleto || "usuario"}, tu código de verificación ContrataT es ${token}. Expira en 10 minutos.`;
+  const html = `<p>Hola ${nombreCompleto || "usuario"},</p><p>Tu código de verificación ContrataT es:</p><h2>${token}</h2><p>Expira en 10 minutos.</p>`;
+
+  if (webhookGmail) {
+    const respuesta = await fetch(webhookGmail, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        secreto: secretoWebhook,
+        destino,
+        asunto,
+        texto,
+        html
+      })
+    });
+    const datos = await respuesta.json().catch(() => null);
+    if (!respuesta.ok || datos?.ok === false) {
+      throw new Error(datos?.mensaje || "El webhook de Gmail no pudo enviar el correo");
+    }
+    return {
+      modo: "gmail-webhook",
+      mensaje: "Código enviado al correo electrónico."
+    };
+  }
+
+  if (!host || !usuario || !contrasena) {
+    console.log("Codigo de correo ContrataT:", { destino, portal, codigo: token });
+    return {
+      modo: "consola",
+      mensaje: "No hay correo configurado. Código mostrado en consola del servidor para prueba."
+    };
+  }
+
+  const transporte = nodemailer.createTransport({
+    host,
+    port: Number(process.env.CORREO_PUERTO || 587),
+    secure: String(process.env.CORREO_SEGURO).toLowerCase() === "true",
+    family: 4,
+    connectionTimeout: 30000,
+    greetingTimeout: 30000,
+    socketTimeout: 60000,
+    auth: { user: usuario, pass: contrasena }
+  });
+
+  await transporte.sendMail({
+    from: process.env.CORREO_REMITENTE || usuario,
+    to: destino,
+    subject: asunto,
+    text: texto,
+    html
+  });
+
+  return {
+    modo: "correo",
+    mensaje: "Código enviado al correo electrónico."
+  };
+}
+
+function limpiarUsuario(usuario) {
+  const { contrasena, ...seguro } = usuario;
+  return seguro;
+}
+
+async function agregarBiometria(postulacion) {
+  const biometria = await obtenerColeccion("biometria").findOne({ postulacionId: postulacion._id });
+  return {
+    ...postulacion,
+    biometria: biometria || null
+  };
+}
+
+async function registrarBitacora(accion, seccion, referenciaId, detalle) {
+  await obtenerColeccion("bitacora").insertOne({
+    accion,
+    seccion,
+    referenciaId,
+    detalle,
+    fecha: new Date()
+  });
+}
+
+function obtenerMensajeAutomatico(estado, razonRechazo = "") {
+  const mensajes = {
+    "Acceso autorizado por RH": "RH validó tu CV. Ya puedes registrar tus datos biométricos para continuar con la entrevista.",
+    "Acceso negado por RH": razonRechazo || "RH no autorizó tu CV para entrevista.",
+    "Biometria rechazada por RH": razonRechazo || "RH no validó tu imagen biométrica. Debes capturarla nuevamente.",
+    "Acceso listo para Seguridad": "RH validó tu biometría. Tu entrevista ya fue agendada y Seguridad podrá verificar tu acceso.",
+    "Asistio a entrevista": "RH registró que asististe a entrevista. Espera el resultado final.",
+    "No asistio a entrevista": razonRechazo || "RH registró que no asististe a la entrevista.",
+    "No aceptado despues de entrevista": razonRechazo || "RH registró que no fuiste aceptado después de la entrevista.",
+    "Perfil egresado generado": "Felicidades. RH generó tu perfil de nuevo ingreso y tu acceso planta."
+  };
+
+  return mensajes[estado] || "";
+}
+
+function obtenerFechaProxima() {
+  const fecha = new Date();
+  fecha.setDate(fecha.getDate() + 3);
+  return fecha.toLocaleDateString("es-MX", {
+    year: "numeric",
+    month: "long",
+    day: "numeric"
+  });
+}
