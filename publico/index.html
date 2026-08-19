@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="es">
   <head>
     <meta charset="utf-8">
@@ -19,11 +19,26 @@
           <a href="seguridad.html">Seguridad</a>
         </nav>
         <div class="sesion">
-          <span id="nombreUsuario">Invitado</span>
-          <button class="boton-claro" data-recargar>Actualizar</button>
-          <button class="boton-claro" data-inicio>Ir a inicio</button>
-          <button class="boton-claro" data-cerrar>Cerrar sesión</button>
+    <div class="menu-desplegable">
+        <button class="boton-menu" type="button" onclick="toggleMenu()">
+            ☰ Menú
+        </button>
+
+        <div class="menu-opciones" id="menuOpciones">
+            <button class="boton-claro" onclick="actualizarPagina()">
+                Actualizar
+            </button>
+
+            <button class="boton-claro" onclick="irInicio()">
+                Ir a inicio
+            </button>
+
+            <button class="boton-peligro" onclick="cerrarSesion()">
+                Cerrar sesión
+            </button>
         </div>
+    </div>
+</div>
       </header>
 
       <main>
