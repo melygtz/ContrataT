@@ -1,4 +1,4 @@
-﻿:root {
+:root {
   --texto: #17212b;
   --gris: #637181;
   --linea: #dbe3ea;
@@ -1569,4 +1569,99 @@ video, .vista-esp32, .preview, .biometria-item img { width: 100%; aspect-ratio: 
   border-radius: 14px;
   background: #edf2f3;
   box-shadow: 0 14px 30px rgba(23,33,43,.08);
+}
+/* =========================================
+   MENÚ DESPLEGABLE DE SESIÓN
+   ========================================= */
+
+.menu-desplegable {
+    position: relative;
+}
+
+.boton-menu {
+    min-height: 42px;
+    padding: 10px 16px;
+    border: 1px solid var(--linea);
+    border-radius: 12px;
+    background: white;
+    color: var(--texto);
+    font-weight: 850;
+    box-shadow: 0 6px 18px rgba(23, 33, 43, .08);
+}
+
+.boton-menu:hover {
+    background: #f5f8fb;
+    transform: translateY(-1px);
+}
+
+.menu-opciones {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+
+    display: none;
+    min-width: 190px;
+
+    padding: 8px;
+
+    border: 1px solid var(--linea);
+    border-radius: 14px;
+
+    background: rgba(255, 255, 255, .98);
+
+    box-shadow: 0 18px 40px rgba(23, 33, 43, .16);
+
+    z-index: 100;
+}
+
+.menu-opciones.mostrar {
+    display: grid;
+    gap: 6px;
+}
+
+.menu-opciones button {
+    width: 100%;
+    min-height: 42px;
+    border-radius: 10px;
+    text-align: left;
+}
+
+.menu-opciones .boton-claro {
+    background: white;
+}
+
+.menu-opciones .boton-claro:hover {
+    background: #f0f7f6;
+}
+
+.menu-opciones .boton-peligro:hover {
+    background: #fff0ee;
+}
+
+
+/* En celular */
+@media (max-width: 620px) {
+
+    .sesion {
+        width: auto;
+        justify-content: flex-end;
+    }
+
+    .menu-desplegable {
+        width: auto;
+    }
+
+    .boton-menu {
+        width: auto;
+        min-width: 120px;
+    }
+
+    .menu-opciones {
+        right: 0;
+        min-width: 210px;
+    }
+
+    .menu-opciones button {
+        width: 100%;
+    }
 }
