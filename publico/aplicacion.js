@@ -1,4 +1,4 @@
-﻿(function () {
+(function () {
   const portal = document.body.dataset.portal;
   const claveSesion = "ContrataT-sesion";
   let usuario = cargarSesion();
@@ -2217,6 +2217,47 @@ async function abrirPuertaEsp32() {
     return urlNormalizada || "";
   }
 })();
+// ==========================================
+// MENÚ DESPLEGABLE DE SESIÓN
+// ==========================================
+
+function toggleMenu() {
+    const menu = document.getElementById("menuOpciones");
+
+    if (menu) {
+        menu.classList.toggle("mostrar");
+    }
+}
+
+function actualizarPagina() {
+    location.reload();
+}
+
+function irInicio() {
+    window.location.href = "index.html";
+}
+
+function cerrarSesion() {
+    localStorage.clear();
+    sessionStorage.clear();
+
+    window.location.href = "index.html";
+}
+
+// Cerrar el menú al hacer clic fuera de él
+document.addEventListener("click", function (evento) {
+
+    const menu = document.querySelector(".menu-desplegable");
+    const opciones = document.getElementById("menuOpciones");
+
+    if (
+        menu &&
+        opciones &&
+        !menu.contains(evento.target)
+    ) {
+        opciones.classList.remove("mostrar");
+    }
+});
 
 
 
