@@ -1665,3 +1665,104 @@ video, .vista-esp32, .preview, .biometria-item img { width: 100%; aspect-ratio: 
         width: 100%;
     }
 }
+
+/* ==========================================
+   CORRECCIÓN DEL MENÚ DESPLEGABLE
+   ========================================== */
+
+.menu-desplegable {
+    position: relative;
+    display: inline-block;
+}
+
+.boton-menu {
+    min-height: 42px;
+    padding: 10px 18px;
+    border: 1px solid var(--linea);
+    border-radius: 12px;
+    background: white;
+    color: var(--texto);
+    font-weight: 850;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.boton-menu:hover {
+    background: #f5f8fb;
+}
+
+/* Menú cerrado */
+.menu-opciones {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    left: auto;
+
+    display: none;
+
+    width: 220px;
+    max-width: calc(100vw - 30px);
+
+    padding: 8px;
+
+    background: white;
+    border: 1px solid var(--linea);
+    border-radius: 16px;
+
+    box-shadow: 0 18px 40px rgba(23, 33, 43, .18);
+
+    z-index: 9999;
+}
+
+/* Menú abierto */
+.menu-opciones.mostrar {
+    display: grid;
+    gap: 7px;
+}
+
+/* Botones internos */
+.menu-opciones button {
+    width: 100%;
+    min-height: 44px;
+    text-align: left;
+    border-radius: 11px;
+    box-sizing: border-box;
+}
+
+/* ==========================================
+   CELULAR
+   ========================================== */
+
+@media (max-width: 620px) {
+
+    .sesion {
+        width: 100%;
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        flex-wrap: nowrap;
+    }
+
+    .menu-desplegable {
+        position: relative;
+        width: auto;
+    }
+
+    .boton-menu {
+        width: auto;
+        min-width: 125px;
+    }
+
+    .menu-opciones {
+        position: fixed;
+
+        top: auto;
+        right: 15px;
+        left: auto;
+
+        width: 220px;
+        max-width: calc(100vw - 30px);
+
+        margin-top: 8px;
+    }
+}
