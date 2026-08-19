@@ -1766,61 +1766,266 @@ video, .vista-esp32, .preview, .biometria-item img { width: 100%; aspect-ratio: 
         margin-top: 8px;
     }
 }
-/* ==========================================
-   AJUSTE DE CÁMARA PARA CELULAR
-   ========================================== */
+
+
+/* =========================================================
+   CONTRATAT - AJUSTE RESPONSIVE FINAL PARA CELULARES
+   ========================================================= */
+
+html, body {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+}
+
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+img, video, iframe, canvas, input, select, textarea, button {
+    max-width: 100%;
+}
 
 @media (max-width: 620px) {
 
-    /* Reducir espacio de la sección de biometría */
-    #panelPrivacidadBiometria,
-    #panelPreviewBiometria {
-        padding: 14px;
+    html, body {
+        width: 100%;
+        max-width: 100%;
+        overflow-x: hidden !important;
     }
 
-    /* Caja de indicaciones más compacta */
+    body {
+        min-width: 0 !important;
+    }
+
+    .barra-superior {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        padding: 12px 14px !important;
+        overflow: visible !important;
+    }
+
+    main {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        margin: 0 !important;
+        padding: 12px 10px 24px !important;
+        overflow-x: hidden !important;
+    }
+
+    .area-trabajo,
+    .contenido,
+    .seccion {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+    }
+
+    .area-trabajo {
+        display: block !important;
+        overflow-x: hidden !important;
+    }
+
+    .contenido {
+        height: auto !important;
+        max-height: none !important;
+        padding: 14px !important;
+        overflow: visible !important;
+    }
+
+    /* MENÚ */
+    .sesion {
+        width: 100% !important;
+        max-width: 100% !important;
+        display: flex !important;
+        justify-content: flex-end !important;
+        align-items: center !important;
+        flex-wrap: nowrap !important;
+        min-width: 0;
+    }
+
+    .menu-desplegable {
+        position: relative;
+        width: auto !important;
+        max-width: 100%;
+    }
+
+    .boton-menu {
+        width: auto !important;
+        min-width: 120px;
+        max-width: 100%;
+        white-space: nowrap;
+    }
+
+    .menu-opciones {
+        position: fixed !important;
+        top: auto !important;
+        right: 12px !important;
+        left: auto !important;
+        width: min(220px, calc(100vw - 24px)) !important;
+        max-width: calc(100vw - 24px) !important;
+        margin-top: 8px;
+        z-index: 99999;
+    }
+
+    /* TÍTULO */
+    .biometria-titulo-final {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        margin-bottom: 14px;
+    }
+
+    .biometria-titulo-final h2 {
+        font-size: clamp(1.75rem, 8vw, 2.3rem);
+        line-height: 1.02;
+        overflow-wrap: anywhere;
+    }
+
+    .biometria-titulo-final p {
+        width: 100%;
+        max-width: 100%;
+        font-size: .95rem;
+        line-height: 1.5;
+    }
+
+    /* ACCESO A CÁMARA */
+    #panelPrivacidadBiometria,
+    #panelPreviewBiometria {
+        display: block;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        margin: 0 !important;
+        padding: 14px !important;
+        overflow: hidden !important;
+    }
+
+    #panelPrivacidadBiometria *,
+    #panelPreviewBiometria * {
+        max-width: 100%;
+    }
+
+    /* INDICACIONES */
     .instrucciones-biometria {
-        margin-bottom: 12px;
-        padding: 12px 14px;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        margin: 0 0 12px !important;
+        padding: 12px 14px !important;
+        overflow: hidden;
     }
 
     .instrucciones-biometria h3 {
-        font-size: 1rem;
         margin-bottom: 6px;
+        font-size: 1rem;
     }
 
     .instrucciones-biometria ul {
-        font-size: 0.88rem;
-        line-height: 1.45;
+        margin: 0;
         padding-left: 18px;
+        font-size: .88rem;
+        line-height: 1.45;
     }
 
     .instrucciones-biometria li + li {
-        margin-top: 2px;
+        margin-top: 3px;
     }
 
-    /* ======================================
-       CÁMARA
-       ====================================== */
+    /* CÁMARA */
+    .camara-grid {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) !important;
+        gap: 12px !important;
+    }
+
+    .camara-grid > * {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+    }
 
     #videoCamara {
-        width: 100%;
-        height: 220px;
-        max-height: 220px;
-        aspect-ratio: auto;
+        display: block;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        height: 210px !important;
+        max-height: 210px !important;
+        aspect-ratio: auto !important;
         object-fit: cover;
-        margin-bottom: 12px;
+        margin: 0 0 12px !important;
         border-radius: 14px;
     }
 
-    /* Botones más compactos */
+    /* BOTONES */
     #iniciarCamara,
     #capturarFoto,
     #enviarFotoBiometria,
     #volverATomarFoto {
+        width: 100% !important;
+        max-width: 100% !important;
         min-height: 44px;
         padding: 10px 12px;
-        font-size: 0.95rem;
+        font-size: .95rem;
     }
 
+    /* TARJETAS */
+    .panel,
+    .tarjeta,
+    .texto-acceso,
+    .item,
+    .biometria-item {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+    }
+
+    .selector-detalle,
+    .rejilla-info,
+    .biometria-grid,
+    .pase-body,
+    .pase-grid {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        grid-template-columns: 1fr !important;
+    }
+
+    /* TEXTO */
+    h1, h2, h3, p, span, label {
+        overflow-wrap: break-word;
+    }
+}
+
+@media (max-width: 380px) {
+
+    main {
+        padding-left: 6px !important;
+        padding-right: 6px !important;
+    }
+
+    .contenido {
+        padding: 10px !important;
+        border-radius: 18px;
+    }
+
+    #panelPrivacidadBiometria,
+    #panelPreviewBiometria {
+        padding: 10px !important;
+    }
+
+    #videoCamara {
+        height: 190px !important;
+        max-height: 190px !important;
+    }
+
+    .boton-menu {
+        min-width: 110px;
+    }
 }
