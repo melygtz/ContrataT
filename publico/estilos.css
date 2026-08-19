@@ -1766,3 +1766,61 @@ video, .vista-esp32, .preview, .biometria-item img { width: 100%; aspect-ratio: 
         margin-top: 8px;
     }
 }
+/* ==========================================
+   AJUSTE DE CÁMARA PARA CELULAR
+   ========================================== */
+
+@media (max-width: 620px) {
+
+    /* Reducir espacio de la sección de biometría */
+    #panelPrivacidadBiometria,
+    #panelPreviewBiometria {
+        padding: 14px;
+    }
+
+    /* Caja de indicaciones más compacta */
+    .instrucciones-biometria {
+        margin-bottom: 12px;
+        padding: 12px 14px;
+    }
+
+    .instrucciones-biometria h3 {
+        font-size: 1rem;
+        margin-bottom: 6px;
+    }
+
+    .instrucciones-biometria ul {
+        font-size: 0.88rem;
+        line-height: 1.45;
+        padding-left: 18px;
+    }
+
+    .instrucciones-biometria li + li {
+        margin-top: 2px;
+    }
+
+    /* ======================================
+       CÁMARA
+       ====================================== */
+
+    #videoCamara {
+        width: 100%;
+        height: 220px;
+        max-height: 220px;
+        aspect-ratio: auto;
+        object-fit: cover;
+        margin-bottom: 12px;
+        border-radius: 14px;
+    }
+
+    /* Botones más compactos */
+    #iniciarCamara,
+    #capturarFoto,
+    #enviarFotoBiometria,
+    #volverATomarFoto {
+        min-height: 44px;
+        padding: 10px 12px;
+        font-size: 0.95rem;
+    }
+
+}
